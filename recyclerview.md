@@ -1,5 +1,24 @@
 # RecyclerView
 
+## RecyclerView被打造成了什么
+
+### onMeasure()
+
+- 大多数情况下,RecyclerView的宽/高都是某个确定值(MatchParent,xxdp),至此其 measuredDimension 就可确定了.measure 过程结束
+
+### onLayout()
+
+- 设计思路?
+- adapter,layoutmanager 不可缺少
+- 在 llm 中的onLayoutChildren 完成 Layout过程
+- Layout的算法
+
+1. 找到一个锚点坐标,一个锚item 的position(作用是什么?)
+
+2. 选择一个方向(自顶向下?自底向上?)填充
+
+3. 
+
 ```java
 void initAdapterManager() {
         mAdapterHelper = new AdapterHelper(new AdapterHelper.Callback() {
