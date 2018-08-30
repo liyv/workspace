@@ -400,3 +400,140 @@ public Activity newActivity(Class<?> clazz, Context context,
         return activity;
     }
 ```
+
+## Activity setContentView()
+
+```java
+public void setContentView(@LayoutRes int layoutResID) {
+        getWindow().setContentView(layoutResID);
+        initWindowDecorActionBar();
+}
+//phoneWindow setContentView
+public void setContentView(int layoutResID) {
+        // Note: FEATURE_CONTENT_TRANSITIONS may be set in the process of installing the window
+        // decor, when theme attributes and the like are crystalized. Do not check the feature
+        // before this happens.
+        if (mContentParent == null) {
+            //用 view 填充 window
+            installDecor();
+        } else if (!hasFeature(FEATURE_CONTENT_TRANSITIONS)) {
+            mContentParent.removeAllViews();
+        }
+        //转场 动画?
+        if (hasFeature(FEATURE_CONTENT_TRANSITIONS)) {
+            final Scene newScene = Scene.getSceneForLayout(mContentParent, layoutResID,
+                    getContext());
+            transitionTo(newScene);
+        } else {
+            mLayoutInflater.inflate(layoutResID, mContentParent);
+        }
+        mContentParent.requestApplyInsets();
+        //Activity
+        final Callback cb = getCallback();
+        if (cb != null && !isDestroyed()) {
+            cb.onContentChanged();
+        }
+        mContentParentExplicitlySet = true;
+}
+//installDecor();
+protected DecorView generateDecor(int featureId) {
+    if (mDecor == null) {
+            //mDecor = DecorView (1个framelayout) 
+            mDecor = generateDecor(-1);
+            mDecor.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            mDecor.setIsRootNamespace(true);
+            if (!mInvalidatePanelMenuPosted && mInvalidatePanelMenuFeatures != 0) {
+                mDecor.postOnAnimation(mInvalidatePanelMenuRunnable);
+            }
+        } else {
+            mDecor.setWindow(this);
+        }
+        if (mContentParent == null) {
+            //
+            mContentParent = generateLayout(mDecor);
+            //...
+        }
+}
+//generateLayout(mDecor);
+protected ViewGroup generateLayout(DecorView decor) {
+    //
+    TypedArray a = getWindowStyle();
+    //...
+    //获取一些 window 的 style 
+    int features = getLocalFeatures();//mLocalFeatures,这就是我们通常在 setcontentview 之前调用 requestFeature 设置的feature 就汇总到 mLocalFeatures了
+    //...
+    //接着再根据 features 选取特定的layout 文件 赋值给 layoutResource 留做后用
+    mDecor.startChanging();
+    mDecor.onResourcesLoaded(mLayoutInflater, layoutResource);
+    //...
+    // Remaining setup -- of background and title -- that only applies
+        // to top-level windows.
+        //mContainer (Window),每个Activity的window都是顶级window,没有mcontainer?那些 toast,dialog等有mContainer吗?
+        if (getContainer() == null) {
+            final Drawable background;
+            if (mBackgroundResource != 0) {
+                background = getContext().getDrawable(mBackgroundResource);
+            } else {
+                background = mBackgroundDrawable;
+            }
+            mDecor.setWindowBackground(background);
+
+            final Drawable frame;
+            if (mFrameResource != 0) {
+                frame = getContext().getDrawable(mFrameResource);
+            } else {
+                frame = null;
+            }
+            mDecor.setWindowFrame(frame);
+
+            mDecor.setElevation(mElevation);
+            mDecor.setClipToOutline(mClipToOutline);
+
+            if (mTitle != null) {
+                setTitle(mTitle);
+            }
+
+            if (mTitleColor == 0) {
+                mTitleColor = mTextColor;
+            }
+            setTitleColor(mTitleColor);
+        }
+
+}
+//mDecor.onResourcesLoaded(mLayoutInflater, layoutResource);
+void onResourcesLoaded(LayoutInflater inflater, int layoutResource) {
+        mStackId = getStackId();
+
+        if (mBackdropFrameRenderer != null) {
+            loadBackgroundDrawablesIfNeeded();
+            mBackdropFrameRenderer.onResourcesLoaded(
+                    this, mResizingBackgroundDrawable, mCaptionBackgroundDrawable,
+                    mUserCaptionBackgroundDrawable, getCurrentColor(mStatusColorViewState),
+                    getCurrentColor(mNavigationColorViewState));
+        }
+
+        mDecorCaptionView = createDecorCaptionView(inflater);
+        final View root = inflater.inflate(layoutResource, null);
+        if (mDecorCaptionView != null) {
+            if (mDecorCaptionView.getParent() == null) {
+                addView(mDecorCaptionView,
+                        new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT));
+            }
+            mDecorCaptionView.addView(root,
+                    new ViewGroup.MarginLayoutParams(MATCH_PARENT, MATCH_PARENT));
+        } else {
+
+            // Put it below the color views.
+            addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT));
+        }
+        mContentRoot = (ViewGroup) root;
+        initializeElevation();
+    }
+// cb.onContentChanged();
+
+
+```
+
+## 疑问
+
+- ActivityThread,ApplicationThread关系?作用?
