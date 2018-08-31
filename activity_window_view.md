@@ -399,6 +399,267 @@ public Activity newActivity(Class<?> clazz, Context context,
                 null /* window */, null /* activityConfigCallback */);
         return activity;
     }
+void makeVisible() {
+        if (!mWindowAdded) {
+            ViewManager wm = getWindowManager();//WindowManagerImpl
+            wm.addView(mDecor, getWindow().getAttributes());
+            mWindowAdded = true;
+        }
+        mDecor.setVisibility(View.VISIBLE);
+    }
+    //WindowManagerImpl
+    public void addView(@NonNull View view, @NonNull ViewGroup.LayoutParams params) {
+        applyDefaultToken(params);
+        mGlobal.addView(view, params, mContext.getDisplay(), mParentWindow);
+    }
+    //mGlobal.addView(view, params, mContext.getDisplay(), mParentWindow);
+    public void addView(View view, ViewGroup.LayoutParams params,
+            Display display, Window parentWindow) {
+        //...
+        ViewRootImpl root;
+        View panelParentView = null;
+
+        synchronized (mLock) {
+            //...
+            //...
+            root = new ViewRootImpl(view.getContext(), display);
+
+            view.setLayoutParams(wparams);
+
+            mViews.add(view);
+            mRoots.add(root);
+            mParams.add(wparams);
+
+            // do this last because it fires off messages to start doing things
+            try {
+                root.setView(view, wparams, panelParentView);
+            } catch (RuntimeException e) {
+                // BadTokenException or InvalidDisplayException, clean up.
+                if (index >= 0) {
+                    removeViewLocked(index, true);
+                }
+                throw e;
+            }
+        }
+}
+// root.setView(view, wparams, panelParentView);
+public void setView(View view, WindowManager.LayoutParams attrs, View panelParentView) {
+        synchronized (this) {
+            if (mView == null) {
+                mView = view;
+
+                mAttachInfo.mDisplayState = mDisplay.getState();
+                mDisplayManager.registerDisplayListener(mDisplayListener, mHandler);
+
+                mViewLayoutDirectionInitial = mView.getRawLayoutDirection();
+                mFallbackEventHandler.setView(view);
+                mWindowAttributes.copyFrom(attrs);
+                if (mWindowAttributes.packageName == null) {
+                    mWindowAttributes.packageName = mBasePackageName;
+                }
+                attrs = mWindowAttributes;
+                setTag();
+
+                if (DEBUG_KEEP_SCREEN_ON && (mClientWindowLayoutFlags
+                        & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0
+                        && (attrs.flags&WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) == 0) {
+                    Slog.d(mTag, "setView: FLAG_KEEP_SCREEN_ON changed from true to false!");
+                }
+                // Keep track of the actual window flags supplied by the client.
+                mClientWindowLayoutFlags = attrs.flags;
+
+                setAccessibilityFocus(null, null);
+
+                if (view instanceof RootViewSurfaceTaker) {
+                    mSurfaceHolderCallback =
+                            ((RootViewSurfaceTaker)view).willYouTakeTheSurface();
+                    if (mSurfaceHolderCallback != null) {
+                        mSurfaceHolder = new TakenSurfaceHolder();
+                        mSurfaceHolder.setFormat(PixelFormat.UNKNOWN);
+                        mSurfaceHolder.addCallback(mSurfaceHolderCallback);
+                    }
+                }
+
+                // Compute surface insets required to draw at specified Z value.
+                // TODO: Use real shadow insets for a constant max Z.
+                if (!attrs.hasManualSurfaceInsets) {
+                    attrs.setSurfaceInsets(view, false /*manual*/, true /*preservePrevious*/);
+                }
+
+                CompatibilityInfo compatibilityInfo =
+                        mDisplay.getDisplayAdjustments().getCompatibilityInfo();
+                mTranslator = compatibilityInfo.getTranslator();
+
+                // If the application owns the surface, don't enable hardware acceleration
+                if (mSurfaceHolder == null) {
+                    enableHardwareAcceleration(attrs);
+                }
+
+                boolean restore = false;
+                if (mTranslator != null) {
+                    mSurface.setCompatibilityTranslator(mTranslator);
+                    restore = true;
+                    attrs.backup();
+                    mTranslator.translateWindowLayout(attrs);
+                }
+                if (DEBUG_LAYOUT) Log.d(mTag, "WindowLayout in setView:" + attrs);
+
+                if (!compatibilityInfo.supportsScreen()) {
+                    attrs.privateFlags |= WindowManager.LayoutParams.PRIVATE_FLAG_COMPATIBLE_WINDOW;
+                    mLastInCompatMode = true;
+                }
+
+                mSoftInputMode = attrs.softInputMode;
+                mWindowAttributesChanged = true;
+                mWindowAttributesChangesFlag = WindowManager.LayoutParams.EVERYTHING_CHANGED;
+                mAttachInfo.mRootView = view;
+                mAttachInfo.mScalingRequired = mTranslator != null;
+                mAttachInfo.mApplicationScale =
+                        mTranslator == null ? 1.0f : mTranslator.applicationScale;
+                if (panelParentView != null) {
+                    mAttachInfo.mPanelParentWindowToken
+                            = panelParentView.getApplicationWindowToken();
+                }
+                mAdded = true;
+                int res; /* = WindowManagerImpl.ADD_OKAY; */
+
+                // Schedule the first layout -before- adding to the window
+                // manager, to make sure we do the relayout before receiving
+                // any other events from the system.
+                requestLayout();
+                if ((mWindowAttributes.inputFeatures
+                        & WindowManager.LayoutParams.INPUT_FEATURE_NO_INPUT_CHANNEL) == 0) {
+                    mInputChannel = new InputChannel();
+                }
+                mForceDecorViewVisibility = (mWindowAttributes.privateFlags
+                        & PRIVATE_FLAG_FORCE_DECOR_VIEW_VISIBILITY) != 0;
+                try {
+                    mOrigWindowType = mWindowAttributes.type;
+                    mAttachInfo.mRecomputeGlobalAttributes = true;
+                    collectViewAttributes();
+                    res = mWindowSession.addToDisplay(mWindow, mSeq, mWindowAttributes,
+                            getHostVisibility(), mDisplay.getDisplayId(),
+                            mAttachInfo.mContentInsets, mAttachInfo.mStableInsets,
+                            mAttachInfo.mOutsets, mInputChannel);
+                } catch (RemoteException e) {
+                    mAdded = false;
+                    mView = null;
+                    mAttachInfo.mRootView = null;
+                    mInputChannel = null;
+                    mFallbackEventHandler.setView(null);
+                    unscheduleTraversals();
+                    setAccessibilityFocus(null, null);
+                    throw new RuntimeException("Adding window failed", e);
+                } finally {
+                    if (restore) {
+                        attrs.restore();
+                    }
+                }
+
+                if (mTranslator != null) {
+                    mTranslator.translateRectInScreenToAppWindow(mAttachInfo.mContentInsets);
+                }
+                mPendingOverscanInsets.set(0, 0, 0, 0);
+                mPendingContentInsets.set(mAttachInfo.mContentInsets);
+                mPendingStableInsets.set(mAttachInfo.mStableInsets);
+                mPendingVisibleInsets.set(0, 0, 0, 0);
+                mAttachInfo.mAlwaysConsumeNavBar =
+                        (res & WindowManagerGlobal.ADD_FLAG_ALWAYS_CONSUME_NAV_BAR) != 0;
+                mPendingAlwaysConsumeNavBar = mAttachInfo.mAlwaysConsumeNavBar;
+                if (DEBUG_LAYOUT) Log.v(mTag, "Added window " + mWindow);
+                if (res < WindowManagerGlobal.ADD_OKAY) {
+                    mAttachInfo.mRootView = null;
+                    mAdded = false;
+                    mFallbackEventHandler.setView(null);
+                    unscheduleTraversals();
+                    setAccessibilityFocus(null, null);
+                    switch (res) {
+                        case WindowManagerGlobal.ADD_BAD_APP_TOKEN:
+                        case WindowManagerGlobal.ADD_BAD_SUBWINDOW_TOKEN:
+                            throw new WindowManager.BadTokenException(
+                                    "Unable to add window -- token " + attrs.token
+                                    + " is not valid; is your activity running?");
+                        case WindowManagerGlobal.ADD_NOT_APP_TOKEN:
+                            throw new WindowManager.BadTokenException(
+                                    "Unable to add window -- token " + attrs.token
+                                    + " is not for an application");
+                        case WindowManagerGlobal.ADD_APP_EXITING:
+                            throw new WindowManager.BadTokenException(
+                                    "Unable to add window -- app for token " + attrs.token
+                                    + " is exiting");
+                        case WindowManagerGlobal.ADD_DUPLICATE_ADD:
+                            throw new WindowManager.BadTokenException(
+                                    "Unable to add window -- window " + mWindow
+                                    + " has already been added");
+                        case WindowManagerGlobal.ADD_STARTING_NOT_NEEDED:
+                            // Silently ignore -- we would have just removed it
+                            // right away, anyway.
+                            return;
+                        case WindowManagerGlobal.ADD_MULTIPLE_SINGLETON:
+                            throw new WindowManager.BadTokenException("Unable to add window "
+                                    + mWindow + " -- another window of type "
+                                    + mWindowAttributes.type + " already exists");
+                        case WindowManagerGlobal.ADD_PERMISSION_DENIED:
+                            throw new WindowManager.BadTokenException("Unable to add window "
+                                    + mWindow + " -- permission denied for window type "
+                                    + mWindowAttributes.type);
+                        case WindowManagerGlobal.ADD_INVALID_DISPLAY:
+                            throw new WindowManager.InvalidDisplayException("Unable to add window "
+                                    + mWindow + " -- the specified display can not be found");
+                        case WindowManagerGlobal.ADD_INVALID_TYPE:
+                            throw new WindowManager.InvalidDisplayException("Unable to add window "
+                                    + mWindow + " -- the specified window type "
+                                    + mWindowAttributes.type + " is not valid");
+                    }
+                    throw new RuntimeException(
+                            "Unable to add window -- unknown error code " + res);
+                }
+
+                if (view instanceof RootViewSurfaceTaker) {
+                    mInputQueueCallback =
+                        ((RootViewSurfaceTaker)view).willYouTakeTheInputQueue();
+                }
+                if (mInputChannel != null) {
+                    if (mInputQueueCallback != null) {
+                        mInputQueue = new InputQueue();
+                        mInputQueueCallback.onInputQueueCreated(mInputQueue);
+                    }
+                    mInputEventReceiver = new WindowInputEventReceiver(mInputChannel,
+                            Looper.myLooper());
+                }
+
+                view.assignParent(this);
+                mAddedTouchMode = (res & WindowManagerGlobal.ADD_FLAG_IN_TOUCH_MODE) != 0;
+                mAppVisible = (res & WindowManagerGlobal.ADD_FLAG_APP_VISIBLE) != 0;
+
+                if (mAccessibilityManager.isEnabled()) {
+                    mAccessibilityInteractionConnectionManager.ensureConnection();
+                }
+
+                if (view.getImportantForAccessibility() == View.IMPORTANT_FOR_ACCESSIBILITY_AUTO) {
+                    view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+                }
+
+                // Set up the input pipeline.
+                CharSequence counterSuffix = attrs.getTitle();
+                mSyntheticInputStage = new SyntheticInputStage();
+                InputStage viewPostImeStage = new ViewPostImeInputStage(mSyntheticInputStage);
+                InputStage nativePostImeStage = new NativePostImeInputStage(viewPostImeStage,
+                        "aq:native-post-ime:" + counterSuffix);
+                InputStage earlyPostImeStage = new EarlyPostImeInputStage(nativePostImeStage);
+                InputStage imeStage = new ImeInputStage(earlyPostImeStage,
+                        "aq:ime:" + counterSuffix);
+                InputStage viewPreImeStage = new ViewPreImeInputStage(imeStage);
+                InputStage nativePreImeStage = new NativePreImeInputStage(viewPreImeStage,
+                        "aq:native-pre-ime:" + counterSuffix);
+
+                mFirstInputStage = nativePreImeStage;
+                mFirstPostImeInputStage = earlyPostImeStage;
+                mPendingInputEventQueueLengthCounterName = "aq:pending:" + counterSuffix;
+            }
+        }
+    }
+
 ```
 
 ## Activity setContentView()
@@ -530,8 +791,227 @@ void onResourcesLoaded(LayoutInflater inflater, int layoutResource) {
         initializeElevation();
     }
 // cb.onContentChanged();
+```
 
+## View setVisibility
 
+```java
+void setFlags(int flags, int mask) {
+        final boolean accessibilityEnabled =
+                AccessibilityManager.getInstance(mContext).isEnabled();
+        final boolean oldIncludeForAccessibility = accessibilityEnabled && includeForAccessibility();
+
+        int old = mViewFlags;
+        mViewFlags = (mViewFlags & ~mask) | (flags & mask);
+
+        int changed = mViewFlags ^ old;
+        if (changed == 0) {
+            return;
+        }
+        int privateFlags = mPrivateFlags;//代表了什么
+
+        // If focusable is auto, update the FOCUSABLE bit.
+        int focusableChangedByAuto = 0;
+        if (((mViewFlags & FOCUSABLE_AUTO) != 0)
+                && (changed & (FOCUSABLE_MASK | CLICKABLE)) != 0) {
+            // Heuristic only takes into account whether view is clickable.
+            final int newFocus;
+            if ((mViewFlags & CLICKABLE) != 0) {
+                newFocus = FOCUSABLE;
+            } else {
+                newFocus = NOT_FOCUSABLE;
+            }
+            mViewFlags = (mViewFlags & ~FOCUSABLE) | newFocus;
+            focusableChangedByAuto = (old & FOCUSABLE) ^ (newFocus & FOCUSABLE);
+            changed = (changed & ~FOCUSABLE) | focusableChangedByAuto;
+        }
+
+        /* Check if the FOCUSABLE bit has changed */
+        if (((changed & FOCUSABLE) != 0) && ((privateFlags & PFLAG_HAS_BOUNDS) != 0)) {
+            if (((old & FOCUSABLE) == FOCUSABLE)
+                    && ((privateFlags & PFLAG_FOCUSED) != 0)) {
+                /* Give up focus if we are no longer focusable */
+                clearFocus();
+                if (mParent instanceof ViewGroup) {
+                    ((ViewGroup) mParent).clearFocusedInCluster();
+                }
+            } else if (((old & FOCUSABLE) == NOT_FOCUSABLE)
+                    && ((privateFlags & PFLAG_FOCUSED) == 0)) {
+                /*
+                 * Tell the view system that we are now available to take focus
+                 * if no one else already has it.
+                 */
+                if (mParent != null) {
+                    ViewRootImpl viewRootImpl = getViewRootImpl();
+                    if (!sAutoFocusableOffUIThreadWontNotifyParents
+                            || focusableChangedByAuto == 0
+                            || viewRootImpl == null
+                            || viewRootImpl.mThread == Thread.currentThread()) {
+                        mParent.focusableViewAvailable(this);
+                    }
+                }
+            }
+        }
+
+        final int newVisibility = flags & VISIBILITY_MASK;
+        if (newVisibility == VISIBLE) {
+            if ((changed & VISIBILITY_MASK) != 0) {
+                /*
+                 * If this view is becoming visible, invalidate it in case it changed while
+                 * it was not visible. Marking it drawn ensures that the invalidation will
+                 * go through.
+                 */
+                mPrivateFlags |= PFLAG_DRAWN;
+                invalidate(true);
+
+                needGlobalAttributesUpdate(true);
+
+                // a view becoming visible is worth notifying the parent
+                // about in case nothing has focus.  even if this specific view
+                // isn't focusable, it may contain something that is, so let
+                // the root view try to give this focus if nothing else does.
+                if ((mParent != null) && (mBottom > mTop) && (mRight > mLeft)) {
+                    mParent.focusableViewAvailable(this);
+                }
+            }
+        }
+
+        /* Check if the GONE bit has changed */
+        if ((changed & GONE) != 0) {
+            needGlobalAttributesUpdate(false);
+            requestLayout();
+
+            if (((mViewFlags & VISIBILITY_MASK) == GONE)) {
+                if (hasFocus()) {
+                    clearFocus();
+                    if (mParent instanceof ViewGroup) {
+                        ((ViewGroup) mParent).clearFocusedInCluster();
+                    }
+                }
+                clearAccessibilityFocus();
+                destroyDrawingCache();
+                if (mParent instanceof View) {
+                    // GONE views noop invalidation, so invalidate the parent
+                    ((View) mParent).invalidate(true);
+                }
+                // Mark the view drawn to ensure that it gets invalidated properly the next
+                // time it is visible and gets invalidated
+                mPrivateFlags |= PFLAG_DRAWN;
+            }
+            if (mAttachInfo != null) {
+                mAttachInfo.mViewVisibilityChanged = true;
+            }
+        }
+
+        /* Check if the VISIBLE bit has changed */
+        if ((changed & INVISIBLE) != 0) {
+            needGlobalAttributesUpdate(false);
+            /*
+             * If this view is becoming invisible, set the DRAWN flag so that
+             * the next invalidate() will not be skipped.
+             */
+            mPrivateFlags |= PFLAG_DRAWN;
+
+            if (((mViewFlags & VISIBILITY_MASK) == INVISIBLE)) {
+                // root view becoming invisible shouldn't clear focus and accessibility focus
+                if (getRootView() != this) {
+                    if (hasFocus()) {
+                        clearFocus();
+                        if (mParent instanceof ViewGroup) {
+                            ((ViewGroup) mParent).clearFocusedInCluster();
+                        }
+                    }
+                    clearAccessibilityFocus();
+                }
+            }
+            if (mAttachInfo != null) {
+                mAttachInfo.mViewVisibilityChanged = true;
+            }
+        }
+
+        if ((changed & VISIBILITY_MASK) != 0) {
+            // If the view is invisible, cleanup its display list to free up resources
+            if (newVisibility != VISIBLE && mAttachInfo != null) {
+                cleanupDraw();
+            }
+
+            if (mParent instanceof ViewGroup) {
+                ((ViewGroup) mParent).onChildVisibilityChanged(this,
+                        (changed & VISIBILITY_MASK), newVisibility);
+                ((View) mParent).invalidate(true);
+            } else if (mParent != null) {
+                mParent.invalidateChild(this, null);
+            }
+
+            if (mAttachInfo != null) {
+                dispatchVisibilityChanged(this, newVisibility);
+
+                // Aggregated visibility changes are dispatched to attached views
+                // in visible windows where the parent is currently shown/drawn
+                // or the parent is not a ViewGroup (and therefore assumed to be a ViewRoot),
+                // discounting clipping or overlapping. This makes it a good place
+                // to change animation states.
+                if (mParent != null && getWindowVisibility() == VISIBLE &&
+                        ((!(mParent instanceof ViewGroup)) || ((ViewGroup) mParent).isShown())) {
+                    dispatchVisibilityAggregated(newVisibility == VISIBLE);
+                }
+                notifySubtreeAccessibilityStateChangedIfNeeded();
+            }
+        }
+
+        if ((changed & WILL_NOT_CACHE_DRAWING) != 0) {
+            destroyDrawingCache();
+        }
+
+        if ((changed & DRAWING_CACHE_ENABLED) != 0) {
+            destroyDrawingCache();
+            mPrivateFlags &= ~PFLAG_DRAWING_CACHE_VALID;
+            invalidateParentCaches();
+        }
+
+        if ((changed & DRAWING_CACHE_QUALITY_MASK) != 0) {
+            destroyDrawingCache();
+            mPrivateFlags &= ~PFLAG_DRAWING_CACHE_VALID;
+        }
+
+        if ((changed & DRAW_MASK) != 0) {
+            if ((mViewFlags & WILL_NOT_DRAW) != 0) {
+                if (mBackground != null
+                        || mDefaultFocusHighlight != null
+                        || (mForegroundInfo != null && mForegroundInfo.mDrawable != null)) {
+                    mPrivateFlags &= ~PFLAG_SKIP_DRAW;
+                } else {
+                    mPrivateFlags |= PFLAG_SKIP_DRAW;
+                }
+            } else {
+                mPrivateFlags &= ~PFLAG_SKIP_DRAW;
+            }
+            requestLayout();
+            invalidate(true);
+        }
+
+        if ((changed & KEEP_SCREEN_ON) != 0) {
+            if (mParent != null && mAttachInfo != null && !mAttachInfo.mRecomputeGlobalAttributes) {
+                mParent.recomputeViewAttributes(this);
+            }
+        }
+
+        if (accessibilityEnabled) {
+            if ((changed & FOCUSABLE) != 0 || (changed & VISIBILITY_MASK) != 0
+                    || (changed & CLICKABLE) != 0 || (changed & LONG_CLICKABLE) != 0
+                    || (changed & CONTEXT_CLICKABLE) != 0) {
+                if (oldIncludeForAccessibility != includeForAccessibility()) {
+                    notifySubtreeAccessibilityStateChangedIfNeeded();
+                } else {
+                    notifyViewAccessibilityStateChangedIfNeeded(
+                            AccessibilityEvent.CONTENT_CHANGE_TYPE_UNDEFINED);
+                }
+            } else if ((changed & ENABLED_MASK) != 0) {
+                notifyViewAccessibilityStateChangedIfNeeded(
+                        AccessibilityEvent.CONTENT_CHANGE_TYPE_UNDEFINED);
+            }
+        }
+    }
 ```
 
 ## 疑问
