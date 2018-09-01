@@ -741,8 +741,8 @@ private void performTraversals() {
                 desiredWindowWidth = size.x;
                 desiredWindowHeight = size.y;
             } else {
-                desiredWindowWidth = dipToPx(config.screenWidthDp);
-                desiredWindowHeight = dipToPx(config.screenHeightDp);
+                desiredWindowWidth = dipToPx(config.screenWidthDp);//宽
+                desiredWindowHeight = dipToPx(config.screenHeightDp);//高
             }
 
             // We used to use the following condition to choose 32 bits drawing caches:
@@ -758,6 +758,8 @@ private void performTraversals() {
             if (mViewLayoutDirectionInitial == View.LAYOUT_DIRECTION_INHERIT) {
                 host.setLayoutDirection(config.getLayoutDirection());
             }
+            //mAttachInfo 包含了哪些信息,这对View 有什么帮助
+            //mAttachInfo : A set of information given to a view when it is attached to its parent window.
             host.dispatchAttachedToWindow(mAttachInfo, 0);
             mAttachInfo.mTreeObserver.dispatchOnWindowAttachedChange(true);
             dispatchApplyInsets(host);
@@ -1823,3 +1825,4 @@ void setFlags(int flags, int mask) {
 
 - ActivityThread,ApplicationThread关系?作用?
 - View 的 mParent 就是 ViewRootImpl 吗?在其 setView() 中调用 view(mdecorView).assignParent(this) 实现
+- InputMethodManager 是什么,作用是什么
