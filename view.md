@@ -471,5 +471,53 @@ public void invalidate(boolean invalidateCache) {
 ## 公共方法
 
 ```java
+//viewrootimpl
+ @Override
+    public void requestLayout() {
+        if (!mHandlingLayoutInLayoutRequest) {
+            checkThread();
+            mLayoutRequested = true;
+            //遍历
+            scheduleTraversals();
+        }
+}
 
+```
+
+## 问题
+
+- requestlayout() 和 invalidate() 是什么关系?什么时候,什么情况下应该用哪个方法?什么时候用组合方法,有哪些组合的先后顺序?
+
+```java
+//requestlayout() 在前
+@Override
+    public void bringChildToFront(View child) {
+        final int index = indexOfChild(child);
+        if (index >= 0) {
+            removeFromArray(index);
+            addInArray(child, mChildrenCount);
+            child.mParent = this;
+            //
+            requestLayout();
+            invalidate();
+        }
+}
+// viewgroup 也是 requestLayout() 在前
+public void addView(View child, int index, LayoutParams params) {
+        if (DBG) {
+            System.out.println(this + " addView");
+        }
+
+        if (child == null) {
+            throw new IllegalArgumentException("Cannot add a null child view to a ViewGroup");
+        }
+
+        // addViewInner() will call child.requestLayout() when setting the new LayoutParams
+        // therefore, we call requestLayout() on ourselves before, so that the child's request
+        // will be blocked at our level
+        //上面这话是什么意思
+        requestLayout();
+        invalidate(true);
+        addViewInner(child, index, params, false);
+    }
 ```
