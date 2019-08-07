@@ -135,3 +135,44 @@ List<Apple> redApples2 = filter(inventory, new ApplePredicate() {
 ## Lambda 表达式
 
 >可把Lambda表达式理解为可传递的匿名函数的一种方式。
+>没有名称，有参数列表、函数主题、返回类型，可能还有一个可以抛出的异常列表。
+
+[img](https://github.com/liyv/workspace/blob/master/%E5%BE%AE%E4%BF%A1%E6%88%AA%E5%9B%BE_20190807124741.png)
+
+```java
+//Java8中有效的Lambda表达式：
+(String s) -> s.length();
+//Lambda没有return语句，因为已经隐含了return
+(Apple a) -> a.getWeight() > 150
+() -> 42
+...
+//哪些是正确的Lambda表达式？
+//1.
+（） -> {}
+//2.
+() -> "Java*"
+//3.
+() -> {return "Java8"}
+//4.
+(Integer i) -> return "Alan" + i;
+//5.
+(String s) -> {"返回Java8"}
+```
+### 在哪里以及如何使用Lambda
+
+>**函数式接口**
+就是只定义一个抽象方法的接口。
+
+- Comparator<T>
+- Runnable
+- Callable
+...
+  
+接口还可以有默认方法，但不管有多少默认方法，只要接口中只有一个抽象方法，它就是一个函数式接口。想想扩展接口的情况？
+
+Lambda表达式允许直接以内联的形式为函数式接口的抽象方法提供实现，并把整个表达式作为函数式接口的实例。
+```java
+Runnable run = () -> System.out.pringln("hello Lambda");
+```
+#### 函数描述符
+函数式接口的抽象方法的签名基本上就是Lambda表达式的签名。将这种抽象方法叫做”函数描述符“
