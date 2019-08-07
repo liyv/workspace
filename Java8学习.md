@@ -206,5 +206,153 @@ Runnable run = () -> System.out.pringln("hello Lambda");
 函数式接口 | 函数描述符 | 原始类型特化
 ------------ | ------------- | -------------
 Predicate\<T> | T->boolean | IntPredicate,LongPredicate等
-Consumer\<T> | T->void | a
-Function\<T,R>|T->R|b
+Consumer\<T> | T->void | IntConsumer
+Function\<T,R>|T->R| ...
+Supplier\<T> | ()->T |...
+UnaryOperator\<T> | T->T|..
+BinaryOperator\<T>| (T,T)->T|
+BiPredicate\<L,R>|(L,R)->boolean|
+BiConsumer\<T,U>| (T,U)->void|
+BiFunction\<T,U,R>|(T,U)->R|
+
+**编译器如何对Lambda做类型检查?**
+
+#### 类型检查、类型推断以及限制
+
+#### 方法引用
+
+排序的例子
+
+```java
+//
+inventory.sort((Apple a1, Apple a2) -> a1.getWeight().compareTo(a2.getWeight()));
+
+//方法引用
+inventory.sort(comparing(Apple::getWeight));
+```
+
+方法引用可以被看作仅仅调用特定方法的Lambda的一种快捷写法。方法引用就是让你根据已有的方法实现来创建Lambda表达式，方法引用不需要括号，因为不是实际调用这个方法，仅仅是一种快捷写法。
+
+方法引用主要有3类：
+
+- 指向*静态方法*的方法引用 Integer::parseInt
+
+- 指向*任意类型实例方法*的方法引用 String::length
+
+- 指向*现有对象的实例方法*的方法引用
+
+第二种思想就是：在引用一个对象的方法，而这个对象本身是Lambda的一个参数。
+
+```java
+(String s) -> s.toUpperCase();
+
+String::toUpperCase
+```
+
+第三种的思想是：你在Lambda的方法主体中调用一个已经存在的外部对象中的方法
+
+```java
+//Lambda表达式
+() -> someObj.getValue();
+
+//可以写为:
+someObj::getValue
+```
+
+构造函数引用
+
+```java
+//其功能与指向静态方法的引用类似
+ClassName::new
+```
+
+用不同的排序策略给apple列表排序
+
+```java
+List.sort();
+
+//1.传递代码
+
+ static class AppleComparator implements Comparator<Apple> {
+        public int compare(Apple a1, Apple a2){
+            return a1.getWeight().compareTo(a2.getWeight());
+        }
+}
+
+inventory.sort(new AppleComparator());
+
+//2.使用匿名类
+inventory.sort(new Comparator<Apple>() {
+            public int compare(Apple a1, Apple a2){
+                return a1.getWeight().compareTo(a2.getWeight()); 
+}});
+
+//3.使用Lambda表达式
+inventory.sort((Apple a1, Apple a2) -> a1.getWeight().compareTo(a2.getWeight()));
+//类型推断
+inventory.sort((a1, a2) -> a1.getWeight().compareTo(a2.getWeight()));
+
+//Comparator有一个叫作comparing的静态辅助方法，其可以接受一个Function来提取Comparable键值，并生成一个Comparator对象,
+//为什么接口可以有静态方法？
+Comparator<Apple> c = Comparator.comparing((Apple a) -> a.getWeight());
+//4.使用方法引用
+inventory.sort(comparing(Apple::getWeight));
+
+```
+
+## 流--Stream
+
+```java
+ public static final List<Dish> menu =
+            Arrays.asList( new Dish("pork", false, 800, Dish.Type.MEAT),
+                           new Dish("beef", false, 700, Dish.Type.MEAT),
+                           new Dish("chicken", false, 400, Dish.Type.MEAT),
+                           new Dish("french fries", true, 530, Dish.Type.OTHER),
+                           new Dish("rice", true, 350, Dish.Type.OTHER),
+                           new Dish("season fruit", true, 120, Dish.Type.OTHER),
+                           new Dish("pizza", true, 550, Dish.Type.OTHER),
+                           new Dish("prawns", false, 400, Dish.Type.FISH),
+                           new Dish("salmon", false, 450, Dish.Type.FISH));
+}
+
+//提取低热量的菜肴的名称
+
+//Java7实现方式
+public static List<String> getLowCaloricDishesNamesInJava7(List<Dish> dishes){
+        List<Dish> lowCaloricDishes = new ArrayList<>();
+        //首先取出低热量的菜肴
+        for(Dish d: dishes){
+            if(d.getCalories() < 400){
+                lowCaloricDishes.add(d);
+            }
+        }
+        //排序
+        List<String> lowCaloricDishesName = new ArrayList<>();
+        Collections.sort(lowCaloricDishes, new Comparator<Dish>() {
+            public int compare(Dish d1, Dish d2){
+                return Integer.compare(d1.getCalories(), d2.getCalories());
+            }
+        });
+        //取出菜肴的名称
+        for(Dish d: lowCaloricDishes){
+            lowCaloricDishesName.add(d.getName());
+        }
+        return lowCaloricDishesName;
+}
+//Java8的实现方式
+public static List<String> getLowCaloricDishesNamesInJava8(List<Dish> dishes){
+        return dishes.stream()
+                .filter(d -> d.getCalories() < 400)
+                .sorted(comparing(Dish::getCalories))
+                .map(Dish::getName)
+                .collect(toList());
+}
+
+```
+
+流简介：从支持数据处理操作的源生成的元素序列，流的目的在于表达计算，集合讲的是数据，流讲的是计算。
+
+```java
+
+
+```
