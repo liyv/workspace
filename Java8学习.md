@@ -135,9 +135,9 @@ List<Apple> redApples2 = filter(inventory, new ApplePredicate() {
 ## Lambda 表达式
 
 >可把Lambda表达式理解为可传递的匿名函数的一种方式。
->没有名称，有参数列表、函数主题、返回类型，可能还有一个可以抛出的异常列表。
+>没有名称，有参数列表、函数主体、返回类型，可能还有一个可以抛出的异常列表。
 
-[img](https://github.com/liyv/workspace/blob/master/%E5%BE%AE%E4%BF%A1%E6%88%AA%E5%9B%BE_20190807124741.png)
+![img](lambda_1.png)
 
 ```java
 //Java8中有效的Lambda表达式：
@@ -171,8 +171,44 @@ List<Apple> redApples2 = filter(inventory, new ApplePredicate() {
 接口还可以有默认方法，但不管有多少默认方法，只要接口中只有一个抽象方法，它就是一个函数式接口。想想扩展接口的情况？
 
 Lambda表达式允许直接以内联的形式为函数式接口的抽象方法提供实现，并把整个表达式作为函数式接口的实例。
+
 ```java
+
 Runnable run = () -> System.out.pringln("hello Lambda");
 ```
+
 #### 函数描述符
-函数式接口的抽象方法的签名基本上就是Lambda表达式的签名。将这种抽象方法叫做”函数描述符“
+
+函数式接口的抽象方法的签名基本上就是Lambda表达式的签名。将这种抽象方法叫做”函数描述符“。
+
+#### Java8 中定义的函数式接口
+
+在java.util.function包中
+
+- Predicate< T>
+
+- Consumer< T>
+
+- Function
+
+泛型函数式接口，由于泛型只能绑定到引用类型，所以在组合使用基本类型和泛型时，会引发装箱和拆箱机制，这在性能方面是有些代价的，为了避免装箱、拆箱，Java8引入了专门针对基本类型的一些接口：
+
+- IntPredicate
+
+- DoublePredicate
+
+- IntConsumer
+
+等等
+
+Java8中常用的函数式接口
+
+函数式接口 | 函数描述符 | 原始类型特化
+
+------------ | ------------- | -------
+
+Predicate\<T> | T->boolean | IntPredicate,LongPredicate ...
+
+Consumer\<T> | T->void |
+
+Function\<T,R>|T->R|
