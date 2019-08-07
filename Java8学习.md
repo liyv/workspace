@@ -201,14 +201,10 @@ Runnable run = () -> System.out.pringln("hello Lambda");
 
 等等
 
-Java8中常用的函数式接口
+**Java8中常用的函数式接口**
 
 函数式接口 | 函数描述符 | 原始类型特化
-
------------- | ------------- | -------
-
-Predicate\<T> | T->boolean | IntPredicate,LongPredicate ...
-
-Consumer\<T> | T->void |
-
-Function\<T,R>|T->R|
+------------ | ------------- | -------------
+Predicate\<T> | T->boolean | IntPredicate,LongPredicate等
+Consumer\<T> | T->void | a
+Function\<T,R>|T->R|b
